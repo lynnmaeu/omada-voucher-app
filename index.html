@@ -25,7 +25,6 @@
         #outputArea { background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-x: auto; min-height: 100px; }
         table.voucher-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
         
-        /* RESTORED: The comfortable spacing you liked! */
         td { border: 1px dashed #000; text-align: center; padding: 8px 2px; vertical-align: middle; }
         
         .line1-shop { font-size: 10pt; font-weight: bold; margin-bottom: 4px; }
@@ -33,24 +32,13 @@
         .line3-cost { font-size: 10pt; font-weight: bold; }
 
         @media print {
-            @page { 
-                size: A4 landscape; 
-                margin: 5mm; /* Gives the printer just a little more room to breathe */
-            }
+            @page { size: A4 landscape; margin: 10mm; }
             .no-print { display: none !important; }
             body { margin: 0; padding: 0; background-color: transparent; }
             #outputArea { padding: 0; box-shadow: none; overflow: visible; }
             td { border: 1px dashed #000; }
-            
-            /* THE FIX: Scale the table down by 3% during print. 
-               This keeps your preferred padding but fits exactly 8 rows. */
-            table.voucher-table { zoom: 0.97; }
-
             tr { page-break-inside: avoid; }
-            tr:nth-child(8n) { 
-                break-after: page; 
-                page-break-after: always; 
-            }
+            tr:nth-child(8n) { break-after: page; page-break-after: always; }
         }
     </style>
 </head>
