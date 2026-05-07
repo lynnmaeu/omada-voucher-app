@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Omada Voucher Customizer</title>
+    
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#007bff">
+    <link rel="apple-touch-icon" href="icon-192.png">
+
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f0f2f5; }
+        .control-panel { background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .control-panel h2 { margin-top: 0; color: #333; }
+        .input-group { margin-bottom: 15px; }
+        .input-group label { font-weight: bold; display: inline-block; width: 150px; }
+        input[type="text"] { padding: 6px; width: 200px; border: 1px solid #ccc; border-radius: 4px; }
+        button { padding: 10px 15px; background-color: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px; }
+        button:hover { background-color: #0056b3; }
+        #printBtn { background-color: #28a745; display: none; }
+        #printBtn:hover { background-color: #218838; }
+        #statusMessage { margin-top: 10px; font-weight: bold; color: #d9534f; }
+
+        #outputArea { background: #ffffff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow-x: auto; min-height: 100px; }
+        table.voucher-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+        
+        td { border: 1px dashed #000; text-align: center; padding: 8px 2px; vertical-align: middle; }
+        
+        .line1-shop { font-size: 10pt; font-weight: bold; margin-bottom: 4px; }
+        .line2-code { font-size: 18pt; font-weight: bold; margin-bottom: 4px; letter-spacing: 1px; white-space: nowrap; }
+        .line3-cost { font-size: 10pt; font-weight: bold; }
+
+        @media print {
+            @page { size: A4 landscape; margin: 10mm; }
+            .no-print { display: none !important; }
+            body { margin: 0; padding: 0; background-color: transparent; }
+            #outputArea { padding: 0; box-shadow: none; overflow: visible; }
+            td { border: 1px dashed #000; }
+            tr { page-break-inside: avoid; }
+            tr:nth-child(8n) { break-after: page; page-break-after: always; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="control-panel no-print">
+        <h2>Omada Custom Voucher Generator</h2>
+        
+        <div class="input-group">
+            <label for="shopName">Shop Name:</label>
+            <input type="text" id="shopName" value="STAR NET" placeholder="Enter Shop Name">
+        </div>
+
+        <div class="input-group">
+            <label for="fileInput">Upload Voucher HTML:</label>
+            <input type="file" id="fileInput" accept=".html">
+        </div>
+
+        <button id="generateBtn">Generate Custom Vouchers</button>
+        <button id="printBtn" onclick="window.print()">Print / Save as PDF</button>
+        
+        <div id="statusMessage"></div>
+    </div>
+
+    <div id="outputArea">
+        <p style="color: #666; text-align: center;">Your formatted vouchers will appear here.</p>
+    </div>
+
+    <script>
+        // --- 1. Service Worker Registration for PWA ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(reg => console.log('Service Worker registered!'))
+                    .catch(err => console.log('Service Worker failed:', err));
+            });
+        }
+
+        // --- 2. Voucher Logic ---
+        function convertToMyanmarNumerals(numStr) {
+            const myanmarDigits = ['၀', '၁', '၂', '၃', '၄', '၅', '၆', '၇', '၈', '၉'];
+            return numStr.toString().replace(/[0-9]/g, function(match) {
+                return myanmarDigits[parseInt(match)];
+            });
+        }
+
+        document.getElementById('generateBtn').addEventListener('click', function() {
+            const fileInput = document.getElementById('fileInput');
+            const shopName = document.getElementById('shopName').value.trim() || 'STAR NET';
+            const statusMessage = document.getElementById('statusMessage');
+            const outputArea = document.getElementById('outputArea');
+
+            statusMessage.innerText = "";
+            document.getElementById('printBtn').style.display = 'none';
+
+            if (!fileInput.files.length) {
+                statusMessage.innerText = "⚠️ Please click 'Choose File' and select your Omada voucher.html file first.";
+                return;
+            }
+
+            statusMessage.style.color = "#007bff";
+            statusMessage.innerText = "Processing file...";
+
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const htmlContent = e.target.result;
+                    const parser = new DOMParser();
+                    const doc = parser.parseFromString(htmlContent, 'text/html');
+
+                    const vouchers = doc.querySelectorAll('.voucher');
+                    
+                    if (vouchers.length === 0) {
+                        statusMessage.style.color = "#d9534f";
+                        statusMessage.innerText = "⚠️ Error: No vouchers found. Are you sure you uploaded the correct Omada HTML file?";
+                        return;
+                    }
+
+                    const columns = 8;
+                    let tableHtml = '<table class="voucher-table">';
+
+                    for (let i = 0; i < vouchers.length; i++) {
+                        if (i % columns === 0) tableHtml += '<tr>';
+
+                        const v = vouchers[i];
+                        
+                        const codeEl = v.querySelector('.code');
+                        const statusEl = v.querySelector('.status');
+                        const priceEl = v.querySelector('.price');
+
+                        const codeText = codeEl ? codeEl.innerText.trim() : '00000000';
+                        
+                        const statusText = statusEl ? statusEl.innerText.trim() : '';
+                        const hoursMatch = statusText.match(/\d+/);
+                        const hoursValue = hoursMatch ? hoursMatch[0] : '0';
+                        
+                        const priceText = priceEl ? priceEl.innerText.trim() : '';
+                        const costMatch = priceText.match(/\d+/);
+                        const costValue = costMatch ? costMatch[0] : '0';
+
+                        const myanmarHours = convertToMyanmarNumerals(hoursValue);
+                        const myanmarCost = convertToMyanmarNumerals(costValue);
+
+                        tableHtml += `
+                            <td>
+                                <div class="line1-shop">${shopName}</div>
+                                <div class="line2-code">${codeText}</div>
+                                <div class="line3-cost">${myanmarHours}နာရီ - ${myanmarCost} ကျပ်</div>
+                            </td>
+                        `;
+
+                        if (i % columns === columns - 1 || i === vouchers.length - 1) {
+                            if (i === vouchers.length - 1 && i % columns !== columns - 1) {
+                                const remainingCells = columns - 1 - (i % columns);
+                                for(let j = 0; j < remainingCells; j++) tableHtml += '<td></td>';
+                            }
+                            tableHtml += '</tr>';
+                        }
+                    }
+
+                    tableHtml += '</table>';
+                    outputArea.innerHTML = tableHtml;
+                    
+                    statusMessage.style.color = "#28a745";
+                    statusMessage.innerText = `✅ Successfully generated ${vouchers.length} vouchers!`;
+                    document.getElementById('printBtn').style.display = 'inline-block';
+
+                } catch (error) {
+                    statusMessage.style.color = "#d9534f";
+                    statusMessage.innerText = "⚠️ An unexpected error occurred while reading the file.";
+                    console.error("Voucher parsing error:", error);
+                }
+            };
+
+            reader.readAsText(file);
+        });
+    </script>
+</body>
+</html>
